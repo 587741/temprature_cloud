@@ -1,10 +1,1927 @@
 <!DOCTYPE html>
-<html>
+<html lang="no">
+
 <head>
-    <title>STM32 Temperature</title>
+    <meta charset="UTF-8">
+
+    <!-- Gjør nettsiden mobilvennlig -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>STM32 Temperature Station</title>
+
+    <style>
+
+        /* =========================================================
+           GENERELLE VARIABLER
+           ========================================================= */
+
+        :root {
+            --background: #eef2f5;
+            --card: #ffffff;
+            --text: #182026;
+            --secondary-text: #66717a;
+            --border: #d9e0e5;
+            --shadow: rgba(0, 0, 0, 0.12);
+
+            --cold: #2196f3;
+            --normal: #2e9d57;
+            --hot: #e74c3c;
+
+            --accent: #34495e;
+        }
+
+
+        /* =========================================================
+           DARK MODE
+           ========================================================= */
+
+        body.dark {
+            --background: #111820;
+            --card: #1d2731;
+            --text: #f2f5f7;
+            --secondary-text: #aeb9c2;
+            --border: #384550;
+            --shadow: rgba(0, 0, 0, 0.4);
+        }
+
+
+        /* =========================================================
+           HELE SIDEN
+           ========================================================= */
+
+        body {
+            margin: 0;
+            padding: 0;
+
+            font-family:
+                Arial,
+                Helvetica,
+                sans-serif;
+
+            background-color: var(--background);
+            color: var(--text);
+
+            transition:
+                background-color 0.3s,
+                color 0.3s;
+        }
+
+
+        /* =========================================================
+           HEADER
+           ========================================================= */
+
+        header {
+            background: var(--card);
+
+            padding: 25px;
+
+            box-shadow:
+                0 4px 12px var(--shadow);
+
+            text-align: center;
+        }
+
+
+        header h1 {
+            margin: 0;
+
+            font-size: clamp(
+                28px,
+                6vw,
+                48px
+            );
+        }
+
+
+        header p {
+            margin-top: 8px;
+
+            color: var(--secondary-text);
+        }
+
+
+        /* =========================================================
+           HOVEDOMRÅDE
+           ========================================================= */
+
+        main {
+            width: min(1100px, 92%);
+
+            margin: 30px auto;
+        }
+
+
+        /* =========================================================
+           GRID
+           ========================================================= */
+
+        .dashboard {
+            display: grid;
+
+            grid-template-columns:
+                repeat(
+                    auto-fit,
+                    minmax(250px, 1fr)
+                );
+
+            gap: 20px;
+        }
+
+
+        /* =========================================================
+           KORT
+           ========================================================= */
+
+        .card {
+            background: var(--card);
+
+            padding: 25px;
+
+            border-radius: 18px;
+
+            box-shadow:
+                0 6px 20px var(--shadow);
+
+            border:
+                1px solid var(--border);
+
+            transition:
+                transform 0.2s,
+                background-color 0.3s;
+        }
+
+
+        .card:hover {
+            transform:
+                translateY(-3px);
+        }
+
+
+        .card h2 {
+            margin-top: 0;
+
+            font-size: 20px;
+
+            color: var(--secondary-text);
+        }
+
+
+        /* =========================================================
+           TEMPERATURVISNING
+           ========================================================= */
+
+        #temperature {
+            font-size:
+                clamp(
+                    50px,
+                    10vw,
+                    90px
+                );
+
+            font-weight: bold;
+
+            margin:
+                20px 0;
+
+            transition:
+                color 0.5s;
+        }
+
+
+        #temperatureDescription {
+            font-size: 20px;
+
+            color: var(--secondary-text);
+        }
+
+
+        /* =========================================================
+           STATUS
+           ========================================================= */
+
+        .status-row {
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+        }
+
+
+        .status-dot {
+            width: 14px;
+            height: 14px;
+
+            border-radius: 50%;
+
+            background-color: gray;
+        }
+
+
+        .status-online {
+            background-color: #2ecc71;
+
+            box-shadow:
+                0 0 8px #2ecc71;
+        }
+
+
+        .status-offline {
+            background-color: #e74c3c;
+
+            box-shadow:
+                0 0 8px #e74c3c;
+        }
+
+
+        /* =========================================================
+           STATISTIKK
+           ========================================================= */
+
+        .statistics {
+            display: grid;
+
+            grid-template-columns:
+                repeat(3, 1fr);
+
+            gap: 10px;
+
+            text-align: center;
+        }
+
+
+        .stat {
+            padding: 15px;
+
+            background: var(--background);
+
+            border-radius: 12px;
+        }
+
+
+        .stat-title {
+            color: var(--secondary-text);
+
+            font-size: 14px;
+        }
+
+
+        .stat-value {
+            font-size: 24px;
+
+            font-weight: bold;
+
+            margin-top: 5px;
+        }
+
+
+        /* =========================================================
+           TEMPERATUR BAR
+           ========================================================= */
+
+        .temperature-bar-container {
+            width: 100%;
+
+            height: 30px;
+
+            background-color: var(--border);
+
+            border-radius: 15px;
+
+            overflow: hidden;
+        }
+
+
+        .temperature-bar {
+            height: 100%;
+
+            width: 0%;
+
+            background-color: var(--normal);
+
+            transition:
+                width 0.5s,
+                background-color 0.5s;
+        }
+
+
+        .temperature-scale {
+            display: flex;
+
+            justify-content: space-between;
+
+            margin-top: 6px;
+
+            color: var(--secondary-text);
+
+            font-size: 13px;
+        }
+
+
+        /* =========================================================
+           TERMOMETER
+           ========================================================= */
+
+        .thermometer-wrapper {
+            display: flex;
+
+            justify-content: center;
+
+            padding: 20px;
+        }
+
+
+        .thermometer {
+            position: relative;
+
+            width: 45px;
+            height: 220px;
+
+            background-color: var(--border);
+
+            border-radius: 25px;
+
+            overflow: hidden;
+
+            border:
+                3px solid var(--accent);
+        }
+
+
+        .thermometer-fill {
+            position: absolute;
+
+            bottom: 0;
+
+            width: 100%;
+
+            height: 0%;
+
+            background-color: var(--normal);
+
+            transition:
+                height 0.5s,
+                background-color 0.5s;
+        }
+
+
+        /* =========================================================
+           KNAPPER
+           ========================================================= */
+
+        .controls {
+            display: flex;
+
+            flex-wrap: wrap;
+
+            gap: 10px;
+
+            justify-content: center;
+        }
+
+
+        button {
+            border: none;
+
+            padding:
+                12px 20px;
+
+            font-size: 16px;
+
+            border-radius: 10px;
+
+            cursor: pointer;
+
+            background-color: var(--accent);
+
+            color: white;
+
+            transition:
+                transform 0.15s,
+                opacity 0.15s;
+        }
+
+
+        button:hover {
+            transform:
+                scale(1.04);
+
+            opacity: 0.9;
+        }
+
+
+        /* =========================================================
+           BILDE
+           ========================================================= */
+
+        .sensor-image {
+            width: 100%;
+
+            max-width: 600px;
+
+            height: auto;
+
+            border-radius: 18px;
+
+            box-shadow:
+                0 8px 25px var(--shadow);
+
+            display: block;
+
+            margin: auto;
+        }
+
+
+        /* =========================================================
+           GRAF
+           ========================================================= */
+
+        .chart-card {
+            margin-top: 20px;
+        }
+
+
+        #temperatureChart {
+            width: 100%;
+
+            height: 300px;
+
+            display: block;
+
+            background-color: var(--background);
+
+            border-radius: 12px;
+        }
+
+
+        /* =========================================================
+           SYSTEM INFO
+           ========================================================= */
+
+        .system-info {
+            line-height: 1.8;
+        }
+
+
+        .system-info strong {
+            display: inline-block;
+
+            min-width: 140px;
+        }
+
+
+        /* =========================================================
+           FOOTER
+           ========================================================= */
+
+        footer {
+            text-align: center;
+
+            padding: 30px;
+
+            color: var(--secondary-text);
+        }
+
+
+        /* =========================================================
+           MOBIL
+           ========================================================= */
+
+        @media (max-width: 600px) {
+
+            main {
+                width: 95%;
+            }
+
+
+            .card {
+                padding: 18px;
+            }
+
+
+            .statistics {
+                grid-template-columns: 1fr;
+            }
+
+
+            #temperature {
+                font-size: 55px;
+            }
+
+        }
+
+    </style>
+
 </head>
+
+
 <body>
-    <h1>STM32 Temperature Server</h1>
-    <p>Render fungerer!</p>
+
+
+    <!-- =========================================================
+         HEADER
+         ========================================================= -->
+
+    <header>
+
+        <h1>🌡 Oscars Room</h1>
+
+        <p>
+            Live temperature measurement from Oscars room on the third floor
+        </p>
+
+    </header>
+
+
+
+    <!-- =========================================================
+         MAIN
+         ========================================================= -->
+
+    <main>
+
+
+        <div class="dashboard">
+
+
+            <!-- =================================================
+                 CURRENT TEMPERATURE
+                 ================================================= -->
+
+            <div class="card">
+
+                <h2>Current Temperature</h2>
+
+                <div id="temperature">
+
+                    {{ temperature }}
+
+                </div>
+
+                <div id="temperatureDescription">
+
+                    Waiting for sensor...
+
+                </div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 CONNECTION STATUS
+                 ================================================= -->
+
+            <div class="card">
+
+                <h2>Connection</h2>
+
+                <div class="status-row">
+
+                    <div
+                        id="statusDot"
+                        class="status-dot">
+                    </div>
+
+                    <strong id="connectionStatus">
+
+                        Connecting...
+
+                    </strong>
+
+                </div>
+
+
+                <p>
+
+                    Last update:
+
+                    <strong id="lastUpdate">
+
+                        --
+
+                    </strong>
+
+                </p>
+
+
+                <p>
+
+                    Samples received:
+
+                    <strong id="sampleCount">
+
+                        0
+
+                    </strong>
+
+                </p>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 TEMPERATURE STATISTICS
+                 ================================================= -->
+
+            <div class="card">
+
+                <h2>Temperature Statistics</h2>
+
+
+                <div class="statistics">
+
+
+                    <div class="stat">
+
+                        <div class="stat-title">
+
+                            Minimum
+
+                        </div>
+
+                        <div
+                            class="stat-value"
+                            id="minTemperature">
+
+                            --
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="stat">
+
+                        <div class="stat-title">
+
+                            Average
+
+                        </div>
+
+                        <div
+                            class="stat-value"
+                            id="avgTemperature">
+
+                            --
+
+                        </div>
+
+                    </div>
+
+
+
+                    <div class="stat">
+
+                        <div class="stat-title">
+
+                            Maximum
+
+                        </div>
+
+                        <div
+                            class="stat-value"
+                            id="maxTemperature">
+
+                            --
+
+                        </div>
+
+                    </div>
+
+
+                </div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 TEMPERATURE BAR
+                 ================================================= -->
+
+            <div class="card">
+
+                <h2>Temperature Level</h2>
+
+
+                <div class="temperature-bar-container">
+
+                    <div
+                        id="temperatureBar"
+                        class="temperature-bar">
+                    </div>
+
+                </div>
+
+
+                <div class="temperature-scale">
+
+                    <span>0°C</span>
+
+                    <span>20°C</span>
+
+                    <span>40°C</span>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 THERMOMETER
+                 ================================================= -->
+
+            <div class="card">
+
+                <h2>Thermometer</h2>
+
+
+                <div class="thermometer-wrapper">
+
+                    <div class="thermometer">
+
+                        <div
+                            id="thermometerFill"
+                            class="thermometer-fill">
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+
+            <!-- =================================================
+                 CONTROLS
+                 ================================================= -->
+
+            <div class="card">
+
+                <h2>Controls</h2>
+
+
+                <div class="controls">
+
+                    <button
+                        id="pauseButton"
+                        onclick="togglePause()">
+
+                        Pause updates
+
+                    </button>
+
+
+                    <button
+                        onclick="resetStatistics()">
+
+                        Reset statistics
+
+                    </button>
+
+
+                    <button
+                        onclick="toggleDarkMode()">
+
+                        Dark mode
+
+                    </button>
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+
+
+        <!-- =====================================================
+             LIVE CHART
+             ===================================================== -->
+
+        <div class="card chart-card">
+
+            <h2>Live Temperature History</h2>
+
+            <canvas
+                id="temperatureChart">
+            </canvas>
+
+        </div>
+
+
+
+        <!-- =====================================================
+             IMAGE
+             ===================================================== -->
+
+        <div class="card chart-card">
+
+            <h2>Sensor Setup</h2>
+
+
+            <img
+                class="sensor-image"
+                src="/static/IMG_5881.jpeg"
+                alt="Vælkommen til gards">
+
+        </div>
+
+
+
+        <!-- =====================================================
+             SYSTEM INFORMATION
+             ===================================================== -->
+
+        <div class="card chart-card">
+
+            <h2>System Information</h2>
+
+
+            <div class="system-info">
+
+                <p>
+                    <strong>Microcontroller:</strong>
+                    STM32F767ZI
+                </p>
+
+
+                <p>
+                    <strong>Board:</strong>
+                    NUCLEO-F767ZI
+                </p>
+
+
+                <p>
+                    <strong>Sensor:</strong>
+                    TMP36GZ
+                </p>
+
+
+                <p>
+                    <strong>ADC:</strong>
+                    ADC1 Channel 3
+                </p>
+
+
+                <p>
+                    <strong>ADC Pin:</strong>
+                    PA3
+                </p>
+
+
+                <p>
+                    <strong>UART:</strong>
+                    USART3
+                </p>
+
+
+                <p>
+                    <strong>UART Speed:</strong>
+                    115200 baud
+                </p>
+
+
+                <p>
+                    <strong>Server:</strong>
+                    Python + Flask
+                </p>
+
+
+            </div>
+
+        </div>
+
+
+    </main>
+
+
+
+    <!-- =========================================================
+         FOOTER
+         ========================================================= -->
+
+    <footer>
+
+        STM32 Temperature Monitoring Project
+
+        <br>
+
+        NUCLEO-F767ZI + TMP36 + Python + Flask
+
+    </footer>
+
+
+
+    <!-- =========================================================
+         JAVASCRIPT
+         ========================================================= -->
+
+    <script>
+
+
+        /* =========================================================
+           VARIABLES
+           ========================================================= */
+
+        let paused = false;
+
+
+        let temperatures = [];
+
+
+        let sampleCount = 0;
+
+
+        let chartValues = [];
+
+
+        let chartTimes = [];
+
+
+        const maxChartPoints = 60;
+
+
+
+        /* =========================================================
+           GET TEMPERATURE FROM FLASK
+           ========================================================= */
+
+        async function updateTemperature() {
+
+
+            if (paused) {
+                return;
+            }
+
+
+            try {
+
+
+                const response =
+                    await fetch("/api/temperature");
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "HTTP error"
+                    );
+
+                }
+
+
+                const data =
+                    await response.json();
+
+
+                const rawTemperature =
+                    data.temperature;
+
+
+                /*
+                    STM32 sender typisk noe som:
+
+                    Temperature: 20.43 C
+
+                    Denne regex-en finner tallet.
+                */
+
+                const match =
+                    String(rawTemperature)
+                    .match(
+                        /-?\d+(\.\d+)?/
+                    );
+
+
+                if (!match) {
+
+                    throw new Error(
+                        "No temperature number found"
+                    );
+
+                }
+
+
+                const temperature =
+                    parseFloat(match[0]);
+
+
+                updateDisplay(
+                    temperature
+                );
+
+
+                updateStatistics(
+                    temperature
+                );
+
+
+                updateTemperatureBar(
+                    temperature
+                );
+
+
+                updateThermometer(
+                    temperature
+                );
+
+
+                addChartValue(
+                    temperature
+                );
+
+
+                setOnlineStatus();
+
+
+            }
+
+            catch (error) {
+
+
+                console.error(
+                    "Temperature update failed:",
+                    error
+                );
+
+
+                setOfflineStatus();
+
+
+            }
+
+
+        }
+
+
+
+        /* =========================================================
+           TEMPERATURE DISPLAY
+           ========================================================= */
+
+        function updateDisplay(
+            temperature
+        ) {
+
+
+            const temperatureElement =
+                document.getElementById(
+                    "temperature"
+                );
+
+
+            const description =
+                document.getElementById(
+                    "temperatureDescription"
+                );
+
+
+            temperatureElement.textContent =
+                temperature.toFixed(2)
+                + " °C";
+
+
+            /*
+                Bestem temperaturkategori.
+            */
+
+            if (temperature < 18) {
+
+
+                temperatureElement.style.color =
+                    "var(--cold)";
+
+
+                description.textContent =
+                    "Cold ❄️";
+
+
+            }
+
+            else if (temperature <= 25) {
+
+
+                temperatureElement.style.color =
+                    "var(--normal)";
+
+
+                description.textContent =
+                    "Comfortable 🌿";
+
+
+            }
+
+            else {
+
+
+                temperatureElement.style.color =
+                    "var(--hot)";
+
+
+                description.textContent =
+                    "Warm 🔥";
+
+
+            }
+
+
+
+            /*
+                Vis tidspunkt for siste måling.
+            */
+
+            const now =
+                new Date();
+
+
+            document.getElementById(
+                "lastUpdate"
+            ).textContent =
+                now.toLocaleTimeString();
+
+
+        }
+
+
+
+        /* =========================================================
+           STATISTICS
+           ========================================================= */
+
+        function updateStatistics(
+            temperature
+        ) {
+
+
+            temperatures.push(
+                temperature
+            );
+
+
+            sampleCount++;
+
+
+            document.getElementById(
+                "sampleCount"
+            ).textContent =
+                sampleCount;
+
+
+
+            const min =
+                Math.min(
+                    ...temperatures
+                );
+
+
+            const max =
+                Math.max(
+                    ...temperatures
+                );
+
+
+            const sum =
+                temperatures.reduce(
+                    (total, value) =>
+                        total + value,
+                    0
+                );
+
+
+            const average =
+                sum /
+                temperatures.length;
+
+
+
+            document.getElementById(
+                "minTemperature"
+            ).textContent =
+                min.toFixed(2)
+                + " °C";
+
+
+            document.getElementById(
+                "maxTemperature"
+            ).textContent =
+                max.toFixed(2)
+                + " °C";
+
+
+            document.getElementById(
+                "avgTemperature"
+            ).textContent =
+                average.toFixed(2)
+                + " °C";
+
+
+        }
+
+
+
+        /* =========================================================
+           TEMPERATURE BAR
+           ========================================================= */
+
+        function updateTemperatureBar(
+            temperature
+        ) {
+
+
+            /*
+                Vi viser 0–40 °C
+                som 0–100%.
+            */
+
+            let percentage =
+                (
+                    temperature /
+                    40
+                )
+                * 100;
+
+
+            percentage =
+                Math.max(
+                    0,
+                    Math.min(
+                        percentage,
+                        100
+                    )
+                );
+
+
+            const bar =
+                document.getElementById(
+                    "temperatureBar"
+                );
+
+
+            bar.style.width =
+                percentage + "%";
+
+
+            if (temperature < 18) {
+
+
+                bar.style.backgroundColor =
+                    "var(--cold)";
+
+
+            }
+
+            else if (temperature <= 25) {
+
+
+                bar.style.backgroundColor =
+                    "var(--normal)";
+
+
+            }
+
+            else {
+
+
+                bar.style.backgroundColor =
+                    "var(--hot)";
+
+
+            }
+
+
+        }
+
+
+
+        /* =========================================================
+           THERMOMETER
+           ========================================================= */
+
+        function updateThermometer(
+            temperature
+        ) {
+
+
+            let percentage =
+                (
+                    temperature /
+                    40
+                )
+                * 100;
+
+
+            percentage =
+                Math.max(
+                    0,
+                    Math.min(
+                        percentage,
+                        100
+                    )
+                );
+
+
+            const thermometer =
+                document.getElementById(
+                    "thermometerFill"
+                );
+
+
+            thermometer.style.height =
+                percentage + "%";
+
+
+            if (temperature < 18) {
+
+
+                thermometer.style.backgroundColor =
+                    "var(--cold)";
+
+
+            }
+
+            else if (temperature <= 25) {
+
+
+                thermometer.style.backgroundColor =
+                    "var(--normal)";
+
+
+            }
+
+            else {
+
+
+                thermometer.style.backgroundColor =
+                    "var(--hot)";
+
+
+            }
+
+
+        }
+
+
+
+        /* =========================================================
+           ONLINE / OFFLINE
+           ========================================================= */
+
+        function setOnlineStatus() {
+
+
+            const dot =
+                document.getElementById(
+                    "statusDot"
+                );
+
+
+            dot.className =
+                "status-dot status-online";
+
+
+            document.getElementById(
+                "connectionStatus"
+            ).textContent =
+                "Sensor online";
+
+
+        }
+
+
+
+        function setOfflineStatus() {
+
+
+            const dot =
+                document.getElementById(
+                    "statusDot"
+                );
+
+
+            dot.className =
+                "status-dot status-offline";
+
+
+            document.getElementById(
+                "connectionStatus"
+            ).textContent =
+                "Sensor offline";
+
+
+        }
+
+
+
+        /* =========================================================
+           PAUSE BUTTON
+           ========================================================= */
+
+        function togglePause() {
+
+
+            paused =
+                !paused;
+
+
+            const button =
+                document.getElementById(
+                    "pauseButton"
+                );
+
+
+            if (paused) {
+
+
+                button.textContent =
+                    "Start updates";
+
+
+            }
+
+            else {
+
+
+                button.textContent =
+                    "Pause updates";
+
+
+            }
+
+
+        }
+
+
+
+        /* =========================================================
+           RESET STATISTICS
+           ========================================================= */
+
+        function resetStatistics() {
+
+
+            temperatures = [];
+
+
+            sampleCount = 0;
+
+
+            chartValues = [];
+
+
+            chartTimes = [];
+
+
+            document.getElementById(
+                "sampleCount"
+            ).textContent =
+                "0";
+
+
+            document.getElementById(
+                "minTemperature"
+            ).textContent =
+                "--";
+
+
+            document.getElementById(
+                "maxTemperature"
+            ).textContent =
+                "--";
+
+
+            document.getElementById(
+                "avgTemperature"
+            ).textContent =
+                "--";
+
+
+            drawChart();
+
+
+        }
+
+
+
+        /* =========================================================
+           DARK MODE
+           ========================================================= */
+
+        function toggleDarkMode() {
+
+
+            document.body.classList.toggle(
+                "dark"
+            );
+
+
+            drawChart();
+
+
+        }
+
+
+
+        /* =========================================================
+           CHART DATA
+           ========================================================= */
+
+        function addChartValue(
+            temperature
+        ) {
+
+
+            chartValues.push(
+                temperature
+            );
+
+
+            chartTimes.push(
+                new Date()
+                .toLocaleTimeString()
+            );
+
+
+            /*
+                Behold kun siste 60 målinger.
+            */
+
+            if (
+                chartValues.length
+                >
+                maxChartPoints
+            ) {
+
+
+                chartValues.shift();
+
+
+                chartTimes.shift();
+
+
+            }
+
+
+            drawChart();
+
+
+        }
+
+
+
+        /* =========================================================
+           CANVAS CHART
+           ========================================================= */
+
+        function drawChart() {
+
+
+            const canvas =
+                document.getElementById(
+                    "temperatureChart"
+                );
+
+
+            const ctx =
+                canvas.getContext(
+                    "2d"
+                );
+
+
+            /*
+                Sørg for at canvas følger faktisk størrelse.
+            */
+
+            canvas.width =
+                canvas.clientWidth;
+
+
+            canvas.height =
+                300;
+
+
+
+            ctx.clearRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+
+
+            /*
+                Farger basert på dark mode.
+            */
+
+            const darkMode =
+                document.body.classList.contains(
+                    "dark"
+                );
+
+
+            const textColor =
+                darkMode
+                    ? "#dddddd"
+                    : "#333333";
+
+
+            const gridColor =
+                darkMode
+                    ? "#44515c"
+                    : "#d9e0e5";
+
+
+
+            /*
+                Chart margin.
+            */
+
+            const left =
+                50;
+
+
+            const right =
+                20;
+
+
+            const top =
+                20;
+
+
+            const bottom =
+                40;
+
+
+
+            const chartWidth =
+                canvas.width
+                - left
+                - right;
+
+
+            const chartHeight =
+                canvas.height
+                - top
+                - bottom;
+
+
+
+            /*
+                Temperatur-skala.
+            */
+
+            const minY =
+                0;
+
+
+            const maxY =
+                40;
+
+
+
+            /*
+                Tegn grid.
+            */
+
+            ctx.strokeStyle =
+                gridColor;
+
+
+            ctx.lineWidth =
+                1;
+
+
+            ctx.fillStyle =
+                textColor;
+
+
+            ctx.font =
+                "12px Arial";
+
+
+
+            for (
+                let temperature = 0;
+                temperature <= 40;
+                temperature += 10
+            ) {
+
+
+                const y =
+                    top
+                    +
+                    chartHeight
+                    -
+                    (
+                        temperature /
+                        maxY
+                    )
+                    *
+                    chartHeight;
+
+
+
+                ctx.beginPath();
+
+
+                ctx.moveTo(
+                    left,
+                    y
+                );
+
+
+                ctx.lineTo(
+                    left + chartWidth,
+                    y
+                );
+
+
+                ctx.stroke();
+
+
+
+                ctx.fillText(
+                    temperature + "°C",
+                    5,
+                    y + 4
+                );
+
+
+            }
+
+
+
+            /*
+                Hvis ingen målinger finnes ennå.
+            */
+
+            if (
+                chartValues.length
+                <
+                2
+            ) {
+
+
+                ctx.fillStyle =
+                    textColor;
+
+
+                ctx.font =
+                    "16px Arial";
+
+
+                ctx.fillText(
+                    "Waiting for temperature history...",
+                    left + 20,
+                    canvas.height / 2
+                );
+
+
+                return;
+
+
+            }
+
+
+
+            /*
+                Tegn temperatur-linja.
+            */
+
+            ctx.beginPath();
+
+
+            ctx.lineWidth =
+                3;
+
+
+            ctx.strokeStyle =
+                "#2e9d57";
+
+
+
+            chartValues.forEach(
+                (
+                    value,
+                    index
+                ) => {
+
+
+                    const x =
+                        left
+                        +
+                        (
+                            index /
+                            (
+                                chartValues.length
+                                - 1
+                            )
+                        )
+                        *
+                        chartWidth;
+
+
+
+                    const y =
+                        top
+                        +
+                        chartHeight
+                        -
+                        (
+                            (
+                                value
+                                - minY
+                            )
+                            /
+                            (
+                                maxY
+                                - minY
+                            )
+                        )
+                        *
+                        chartHeight;
+
+
+
+                    if (
+                        index === 0
+                    ) {
+
+
+                        ctx.moveTo(
+                            x,
+                            y
+                        );
+
+
+                    }
+
+                    else {
+
+
+                        ctx.lineTo(
+                            x,
+                            y
+                        );
+
+
+                    }
+
+
+                }
+            );
+
+
+            ctx.stroke();
+
+
+        }
+
+
+
+        /* =========================================================
+           WINDOW RESIZE
+           ========================================================= */
+
+        window.addEventListener(
+            "resize",
+            drawChart
+        );
+
+
+
+        /* =========================================================
+           START PROGRAM
+           ========================================================= */
+
+        /*
+            Hent første temperatur med en gang.
+        */
+
+        updateTemperature();
+
+
+        /*
+            Deretter hvert sekund.
+        */
+
+        setInterval(
+            updateTemperature,
+            1000
+        );
+
+
+    </script>
+
+
 </body>
+
 </html>
